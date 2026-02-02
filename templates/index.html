@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Invoice Editor</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #f8f9fa; padding: 40px; }
+        .container { background: white; padding: 30px; border-radius: 12px; max-width: 1100px; margin: auto; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
+        .header-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 30px; }
+        input { padding: 10px; border: 1px solid #ced4da; border-radius: 4px; font-size: 14px; width: 100%; box-sizing: border-box; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th { background: #495057; color: white; padding: 12px; text-align: left; }
+        .btn { padding: 12px 24px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%; margin-top: 20px; }
+        .btn-generate { background: #007bff; color: white; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h2> Invoice Form</h2>
+    <form action="/generate" method="POST">
+        <div class="header-grid">
+            <input type="text" name="customer_name" placeholder="Customer Name" value="M/S Green Pharmacy">
+            <input type="text" name="invoice_no" placeholder="Invoice #" value="HHC-09876">
+            <input type="text" name="address" placeholder="Address" value="Township Road">
+            <input type="text" name="date" placeholder="Date (DD/MM/YYYY)" value="24/02/2026">
+            <input type="text" name="license_no" placeholder="License No" value="05-352-0070-061888P">
+        </div>
+
+        <table>
+            <thead>
+                <tr>
+                    <th>Item Name</th>
+                    <th>Qty</th>
+                    <th>Batch Number</th>
+                    <th>Expiry</th>
+                    <th>Trade Price</th>
+                    <th>Disc%</th>
+                </tr>
+            </thead>
+            <tbody id="item-list">
+                </tbody>
+        </table>
+        
+        <button type="button" onclick="addRow()" style="margin-top:10px;">+ Add Row</button>
+        <button type="submit" class="btn btn-generate">Generate Boxed PDF</button>
+    </form>
+</div>
+
+<script>
+    function addRow() {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td><input type="text" name="item_name[]" placeholder="Filgut Sachet"></td>
+            <td><input type="number" name="qty[]" value="0"></td>
+            <td><input type="text" name="batch[]" placeholder="Batch"></td>
+            <td><input type="text" name="expiry[]" placeholder="MM/YY"></td>
+            <td><input type="number" step="0.01" name="price[]" value="0"></td>
+            <td><input type="number" name="discount[]" value="0"></td>
+        `;
+        document.getElementById('item-list').appendChild(tr);
+    }
+    // Add first row on load
+    window.onload = addRow;
+</script>
+</body>
+</html>
