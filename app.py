@@ -7,11 +7,13 @@ app = Flask(__name__)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 UPLOAD_FOLDER = os.path.join(BASE_DIR, "uploads")
-OUTPUT_FOLDER = os.path.join(BASE_DIR, "outputs")
+
+# SERVERLESS SAFE
+OUTPUT_FOLDER = "/tmp"
 ORIGINAL_PDF = os.path.join(UPLOAD_FOLDER, "original.pdf")
 
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
-os.makedirs(OUTPUT_FOLDER, exist_ok=True)
+
 
 # ==========================
 # SAFE DECIMAL (ADDED)
