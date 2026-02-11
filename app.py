@@ -1,7 +1,7 @@
 from flask import Flask, render_template, request, send_file
 import fitz  # PyMuPDF
 import os
-from decimal import Decimal
+from decimal import Decimal, InvalidOperation
 
 app = Flask(__name__)
 
@@ -14,13 +14,21 @@ os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
 # ==========================
+# SAFE DECIMAL (ADDED)
+# ==========================
+def safe_decimal(value):
+    try:
+        return Decimal(value)
+    except (InvalidOperation, TypeError):
+        return Decimal("0.00")
+
+# ==========================
 # RECT HELPERS
 # ==========================
 def wipe_rect(page, rect):
     r = fitz.Rect(rect)
     page.add_redact_annot(r, fill=(1, 1, 1))
     page.apply_redactions()
-
 
 def write_in_rect(page, rect, text, fontsize=8):
     r = fitz.Rect(rect)
@@ -31,9 +39,8 @@ def write_in_rect(page, rect, text, fontsize=8):
         fontname="helv"
     )
 
-
 # ==========================
-# COORDINATES
+# COORDINATES (UNCHANGED)
 # ==========================
 HEADER_COORDS = {
     "customer_name": (125.84, 110.15, 272.87, 122.43),
@@ -58,7 +65,7 @@ ROW_START_Y = 221.4
 ROW_HEIGHT = 9.5
 
 # ==========================
-# TOTAL / VALUE RECTANGLES
+# TOTAL RECTANGLES (UNCHANGED)
 # ==========================
 GROSS_RECT = (
     438.29998779296875,
@@ -82,12 +89,11 @@ NET_RECT = (
 )
 
 NET_PAYABLE_WIPE_RECT = (
-    530.0,                 # x0 → thora left
-    323.0,                 # y0
-    580.0,                 # x1 → thora right
-    340.0                  # y1
+    530.0,
+    323.0,
+    580.0,
+    340.0
 )
-
 
 PAYABLE_RECT = (
     540.8499755859375,
@@ -95,7 +101,6 @@ PAYABLE_RECT = (
     567.8770141601562,
     336.66796875
 )
-
 
 TOTAL_RECT = (539.33, 242.04, 573.66, 252.09)
 
@@ -130,9 +135,10 @@ def process_invoice(data):
     for i, item in enumerate(data["items"]):
         y = ROW_START_Y + i * ROW_HEIGHT
 
-        qty = Decimal(item["qty"] or 0)
-        price = Decimal(item["price"] or 0)
-        disc = Decimal(item["discount"] or 0)
+        # 🔥 SAFE DECIMAL USED (UPDATED)
+        qty = safe_decimal(item["qty"] or "0")
+        price = safe_decimal(item["price"] or "0")
+        disc = safe_decimal(item["discount"] or "0")
 
         total_gross += price * qty
 
@@ -149,37 +155,16 @@ def process_invoice(data):
         page.insert_text((TABLE_COLS["discount"], y + ROW_HEIGHT), f"{disc}%", fontsize=8)
         page.insert_text((TABLE_COLS["amount"], y + ROW_HEIGHT), f"{amount:.2f}", fontsize=8)
 
-    # -------- TOTALS (CORRECT WAY) --------
-
-    # GROSS → replace static printed value only
+    # -------- TOTALS --------
     wipe_rect(page, GROSS_VALUE_RECT)
-    write_in_rect(
-    page,
-    GROSS_VALUE_RECT,
-    f"{total_gross:.2f}",
-    fontsize=9
-    )
+    write_in_rect(page, GROSS_VALUE_RECT, f"{total_gross:.2f}", fontsize=9)
 
-    # NET PAYABLE → replace static printed value only
-    # NET PAYABLE → exact purani value replace
     wipe_rect(page, NET_PAYABLE_WIPE_RECT)
-    write_in_rect(
-    page,
-    PAYABLE_RECT,
-    f"{total_net_payable:.2f}",
-    fontsize=9
-    )
+    write_in_rect(page, PAYABLE_RECT, f"{total_net_payable:.2f}", fontsize=9)
 
-    # COMPANY TOTAL
     wipe_rect(page, TOTAL_RECT)
-    write_in_rect(
-        page,
-        TOTAL_RECT,
-        f"{total_net_payable:.2f}",
-        fontsize=9
-    )
+    write_in_rect(page, TOTAL_RECT, f"{total_net_payable:.2f}", fontsize=9)
 
-    # -------- SAVE PDF --------
     output_path = os.path.join(
         OUTPUT_FOLDER,
         f"Invoice_{data['invoice_no']}.pdf"
@@ -190,8 +175,6 @@ def process_invoice(data):
 
     return output_path
 
-
-
 # ==========================
 # ROUTES
 # ==========================
@@ -199,45 +182,48 @@ def process_invoice(data):
 def index():
     return render_template("index.html")
 
-
 @app.route("/generate", methods=["POST"])
 def generate():
+    try:
+        items = []
 
-    items = []
+        names = request.form.getlist("item_name[]")
+        qtys = request.form.getlist("qty[]")
+        batches = request.form.getlist("batch[]")
+        expiries = request.form.getlist("expiry[]")
+        prices = request.form.getlist("price[]")
+        discounts = request.form.getlist("discount[]")
 
-    names = request.form.getlist("item_name[]")
-    qtys = request.form.getlist("qty[]")
-    batches = request.form.getlist("batch[]")
-    expiries = request.form.getlist("expiry[]")
-    prices = request.form.getlist("price[]")
-    discounts = request.form.getlist("discount[]")
+        for i in range(len(names)):
+            if names[i]:
+                items.append({
+                    "name": names[i],
+                    "qty": qtys[i],
+                    "batch": batches[i],
+                    "expiry": expiries[i],
+                    "price": prices[i],
+                    "discount": discounts[i],
+                })
 
-    for i in range(len(names)):
-        if names[i]:
-            items.append({
-                "name": names[i],
-                "qty": qtys[i],
-                "batch": batches[i],
-                "expiry": expiries[i],
-                "price": prices[i],
-                "discount": discounts[i],
-            })
+        data = {
+            "customer_name": request.form.get("customer_name"),
+            "address": request.form.get("address"),
+            "invoice_no": request.form.get("invoice_no"),
+            "date": request.form.get("date"),
+            "license_no": request.form.get("license_no"),
+            "items": items,
+        }
 
-    data = {
-        "customer_name": request.form.get("customer_name"),
-        "address": request.form.get("address"),
-        "invoice_no": request.form.get("invoice_no"),
-        "date": request.form.get("date"),
-        "license_no": request.form.get("license_no"),
-        "items": items,
-    }
+        pdf_path = process_invoice(data)
 
-    pdf_path = process_invoice(data)
-    return send_file(pdf_path, as_attachment=True)
+        if not pdf_path:
+            return "Original PDF file not found on server!", 500
+
+        return send_file(pdf_path, as_attachment=True)
+
+    except Exception as e:
+        return f"Internal Server Error: {str(e)}", 500
 
 
-# ==========================
-# RUN APP
-# ==========================
 if __name__ == "__main__":
     app.run(debug=True, port=4000)
